@@ -482,7 +482,7 @@ TSharedPtr<FglTFRuntimeParser> FglTFRuntimeParser::FromData(const uint8* DataPtr
 	TSharedPtr<FglTFRuntimeArchive> Archive = nullptr;
 
 	// Zip archive ?
-	if (DataNum > 4 && DataPtr[0] == 0x50 && DataPtr[1] == 0x4b && DataPtr[2] == 0x03 && DataPtr[3] == 0x04)
+	if (!LoaderConfig.bNoArchive && DataNum > 4 && DataPtr[0] == 0x50 && DataPtr[1] == 0x4b && DataPtr[2] == 0x03 && DataPtr[3] == 0x04)
 	{
 		TSharedPtr<FglTFRuntimeArchiveZip> ZipFile = MakeShared<FglTFRuntimeArchiveZip>();
 		if (!LoaderConfig.EncryptionKey.IsEmpty())
@@ -499,7 +499,7 @@ TSharedPtr<FglTFRuntimeParser> FglTFRuntimeParser::FromData(const uint8* DataPtr
 		Archive = ZipFile;
 	}
 	// tar ?
-	else if (DataNum % 512 == 0 && DataNum >= 10240 && DataPtr[257] == 'u' && DataPtr[258] == 's' && DataPtr[259] == 't' && DataPtr[260] == 'a' && DataPtr[261] == 'r')
+	else if (!LoaderConfig.bNoArchive && DataNum % 512 == 0 && DataNum >= 10240 && DataPtr[257] == 'u' && DataPtr[258] == 's' && DataPtr[259] == 't' && DataPtr[260] == 'a' && DataPtr[261] == 'r')
 	{
 		TMap<FString, TArray64<uint8>> TarMap;
 
@@ -2582,6 +2582,32 @@ bool FglTFRuntimeParser::FillReferenceSkeletonFromNode(const FglTFRuntimeNode& R
 	return TraverseJoints(Modifier, RootNode.Index, INDEX_NONE, RootNode, {}, BoneMap, {}, SkeletonConfig);
 }
 
+bool FglTFRuntimeParser::RemapRuntimeLODBoneNames(FglTFRuntimeMeshLOD& RuntimeLOD, const FglTFRuntimeSkeletonConfig& SkeletonConfig)
+{
+	for (int32 BoneIndex = 0; BoneIndex < RuntimeLOD.Skeleton.Num(); BoneIndex++)
+	{
+		FglTFRuntimeBone& Bone = RuntimeLOD.Skeleton[BoneIndex];
+		if (SkeletonConfig.BoneRemapper.Remapper.IsBound())
+		{
+			Bone.BoneName = SkeletonConfig.BoneRemapper.Remapper.Execute(BoneIndex, Bone.BoneName, SkeletonConfig.BoneRemapper.Context);
+		}
+		
+		if (SkeletonConfig.BonesNameMap.Contains(Bone.BoneName))
+		{
+			FString BoneNameMapValue = SkeletonConfig.BonesNameMap[Bone.BoneName];
+			if (BoneNameMapValue.IsEmpty())
+			{
+				AddError("RemapRuntimeLODBoneNames()", FString::Printf(TEXT("Invalid Bone Name Map for %s"), *Bone.BoneName));
+				return false;
+			}
+
+			Bone.BoneName = BoneNameMapValue;
+		}
+	}
+
+	return true;
+}
+
 bool FglTFRuntimeParser::TraverseJoints(FReferenceSkeletonModifier& Modifier, const int32 RootIndex, int32 Parent, const FglTFRuntimeNode& Node, const TArray<int32>& Joints, TMap<int32, FName>& BoneMap, const TMap<int32, FMatrix>& InverseBindMatricesMap, const FglTFRuntimeSkeletonConfig& SkeletonConfig)
 {
 	TArray<FString> AppendBones;
@@ -4647,6 +4673,13 @@ bool FglTFRuntimeParser::GetAccessor(const int32 Index, int64& ComponentType, in
 		}
 		Blob.Data = AdditionalBufferView->Data;
 		Blob.Num = FinalSize;
+
+		// special case for bigger buffers
+		if (FinalSize < AdditionalBufferView->Num && (AdditionalBufferView->Num % (ElementSize * Elements)) == 0)
+		{
+			Count = AdditionalBufferView->Num / (ElementSize * Elements);
+		}
+
 		if (!bHasSparse)
 		{
 			Stride = ElementSize * Elements;
@@ -5527,6 +5560,26 @@ TArray<TSharedRef<FJsonObject>> FglTFRuntimeParser::GetMeshPrimitives(TSharedRef
 	}
 
 	return Primitives;
+}
+
+TArray<TSharedRef<FJsonObject>> FglTFRuntimeParser::GetMaterials() const
+{
+	TArray<TSharedRef<FJsonObject>> Materials;
+
+	const TArray<TSharedPtr<FJsonValue>>* JsonArray;
+	if (Root->TryGetArrayField(TEXT("materials"), JsonArray))
+	{
+		for (TSharedPtr<FJsonValue> JsonValue : *JsonArray)
+		{
+			const TSharedPtr<FJsonObject>* JsonObject;
+			if (JsonValue->TryGetObject(JsonObject))
+			{
+				Materials.Add(JsonObject->ToSharedRef());
+			}
+		}
+	}
+
+	return Materials;
 }
 
 TSharedPtr<FJsonObject> FglTFRuntimeParser::GetJsonObjectExtras(TSharedRef<FJsonObject> JsonObject) const
@@ -6519,4 +6572,19 @@ void FglTFRuntimeParser::FillAssetUserData(const int32 Index, IInterface_AssetUs
 			InObject->AddAssetUserData(AssetUserData);
 		}
 	}
+}
+
+void FglTFRuntimeParser::UpdateSceneBasis(const FMatrix& InSceneBasis)
+{
+	SceneBasis = InSceneBasis;
+}
+
+void FglTFRuntimeParser::UpdateSceneScale(const float& InSceneScale)
+{
+	SceneScale = InSceneScale;
+}
+
+float FglTFRuntimeParser::GetSceneScale() const
+{
+	return SceneScale;
 }

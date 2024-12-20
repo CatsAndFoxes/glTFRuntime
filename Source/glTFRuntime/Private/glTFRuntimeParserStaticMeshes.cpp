@@ -269,6 +269,15 @@ UStaticMesh* FglTFRuntimeParser::LoadStaticMesh_Internal(TSharedRef<FglTFRuntime
 								StaticMeshVertex.UVs[UVIndex] = GetSafeValue(Primitive.UVs[UVIndex], VertexIndex, FVector2D::ZeroVector, bMissingIgnore);
 #endif
 							}
+							// no UVs specified, let's set them to 0
+							else
+							{
+#if ENGINE_MAJOR_VERSION > 4
+								StaticMeshVertex.UVs[UVIndex] = FVector2f::ZeroVector;
+#else
+								StaticMeshVertex.UVs[UVIndex] = FVector2D::ZeroVector;
+#endif
+							}
 						}
 
 						if (bHasVertexColors)
@@ -334,6 +343,15 @@ UStaticMesh* FglTFRuntimeParser::LoadStaticMesh_Internal(TSharedRef<FglTFRuntime
 								StaticMeshVertex.UVs[UVIndex] = GetSafeValue(Primitive.UVs[UVIndex], VertexIndex, FVector2D::ZeroVector, bMissingIgnore);
 #endif
 							}
+							// no UVs specified, let's set them to 0
+							else
+							{
+#if ENGINE_MAJOR_VERSION > 4
+								StaticMeshVertex.UVs[UVIndex] = FVector2f::ZeroVector;
+#else
+								StaticMeshVertex.UVs[UVIndex] = FVector2D::ZeroVector;
+#endif
+							}
 						}
 
 						if (bHasVertexColors)
@@ -386,13 +404,13 @@ UStaticMesh* FglTFRuntimeParser::LoadStaticMesh_Internal(TSharedRef<FglTFRuntime
 						bool bSetVertex1 = false;
 						bool bSetVertex2 = false;
 
+						const uint32 VertexIndex0 = LODIndices[VertexInstanceSectionIndex];
+						const uint32 VertexIndex1 = LODIndices[VertexInstanceSectionIndex + 1];
+						const uint32 VertexIndex2 = LODIndices[VertexInstanceSectionIndex + 2];
+
 						if (Primitive.bHasIndices)
 						{
 							FScopeLock Lock(&NormalsGenerationLock);
-
-							const uint32 VertexIndex0 = LODIndices[VertexInstanceSectionIndex];
-							const uint32 VertexIndex1 = LODIndices[VertexInstanceSectionIndex + 1];
-							const uint32 VertexIndex2 = LODIndices[VertexInstanceSectionIndex + 2];
 
 							if (!ProcessedVertices.Contains(VertexIndex0))
 							{
@@ -424,9 +442,14 @@ UStaticMesh* FglTFRuntimeParser::LoadStaticMesh_Internal(TSharedRef<FglTFRuntime
 							bSetVertex2 = true;
 						}
 
-						FStaticMeshBuildVertex& StaticMeshVertex0 = StaticMeshBuildVertices[LODIndices[VertexInstanceSectionIndex]];
-						FStaticMeshBuildVertex& StaticMeshVertex1 = StaticMeshBuildVertices[LODIndices[VertexInstanceSectionIndex + 1]];
-						FStaticMeshBuildVertex& StaticMeshVertex2 = StaticMeshBuildVertices[LODIndices[VertexInstanceSectionIndex + 2]];
+						if (!StaticMeshBuildVertices.IsValidIndex(VertexIndex0) || !StaticMeshBuildVertices.IsValidIndex(VertexIndex1) || !StaticMeshBuildVertices.IsValidIndex(VertexIndex2))
+						{
+							return;
+						}
+
+						FStaticMeshBuildVertex& StaticMeshVertex0 = StaticMeshBuildVertices[VertexIndex0];
+						FStaticMeshBuildVertex& StaticMeshVertex1 = StaticMeshBuildVertices[VertexIndex1];
+						FStaticMeshBuildVertex& StaticMeshVertex2 = StaticMeshBuildVertices[VertexIndex2];
 
 #if ENGINE_MAJOR_VERSION > 4
 						FVector SideA = FVector(StaticMeshVertex1.Position - StaticMeshVertex0.Position);
@@ -477,13 +500,13 @@ UStaticMesh* FglTFRuntimeParser::LoadStaticMesh_Internal(TSharedRef<FglTFRuntime
 						bool bSetVertex1 = false;
 						bool bSetVertex2 = false;
 
+						const uint32 VertexIndex0 = LODIndices[VertexInstanceSectionIndex];
+						const uint32 VertexIndex1 = LODIndices[VertexInstanceSectionIndex + 1];
+						const uint32 VertexIndex2 = LODIndices[VertexInstanceSectionIndex + 2];
+
 						if (Primitive.bHasIndices)
 						{
 							FScopeLock Lock(&TangentsGenerationLock);
-
-							const uint32 VertexIndex0 = LODIndices[VertexInstanceSectionIndex];
-							const uint32 VertexIndex1 = LODIndices[VertexInstanceSectionIndex + 1];
-							const uint32 VertexIndex2 = LODIndices[VertexInstanceSectionIndex + 2];
 
 							if (!ProcessedVertices.Contains(VertexIndex0))
 							{
@@ -515,10 +538,14 @@ UStaticMesh* FglTFRuntimeParser::LoadStaticMesh_Internal(TSharedRef<FglTFRuntime
 							bSetVertex2 = true;
 						}
 
+						if (!StaticMeshBuildVertices.IsValidIndex(VertexIndex0) || !StaticMeshBuildVertices.IsValidIndex(VertexIndex1) || !StaticMeshBuildVertices.IsValidIndex(VertexIndex2))
+						{
+							return;
+						}
 
-						FStaticMeshBuildVertex& StaticMeshVertex0 = StaticMeshBuildVertices[LODIndices[VertexInstanceSectionIndex]];
-						FStaticMeshBuildVertex& StaticMeshVertex1 = StaticMeshBuildVertices[LODIndices[VertexInstanceSectionIndex + 1]];
-						FStaticMeshBuildVertex& StaticMeshVertex2 = StaticMeshBuildVertices[LODIndices[VertexInstanceSectionIndex + 2]];
+						FStaticMeshBuildVertex& StaticMeshVertex0 = StaticMeshBuildVertices[VertexIndex0];
+						FStaticMeshBuildVertex& StaticMeshVertex1 = StaticMeshBuildVertices[VertexIndex1];
+						FStaticMeshBuildVertex& StaticMeshVertex2 = StaticMeshBuildVertices[VertexIndex2];
 
 #if ENGINE_MAJOR_VERSION > 4
 						const FVector Position0 = FVector(StaticMeshVertex0.Position);
@@ -780,6 +807,11 @@ UStaticMesh* FglTFRuntimeParser::LoadStaticMesh_Internal(TSharedRef<FglTFRuntime
 					continue;
 				}
 
+				if (!StaticMeshBuildVertices.IsValidIndex(VertexIndex0) || !StaticMeshBuildVertices.IsValidIndex(VertexIndex1) || !StaticMeshBuildVertices.IsValidIndex(VertexIndex2))
+				{
+					continue;
+				}
+
 				const FVertexInstanceID VertexInstanceID0 = MeshDescription->CreateVertexInstance(FVertexID(VertexIndex0));
 				const FVertexInstanceID VertexInstanceID1 = MeshDescription->CreateVertexInstance(FVertexID(VertexIndex1));
 				const FVertexInstanceID VertexInstanceID2 = MeshDescription->CreateVertexInstance(FVertexID(VertexIndex2));
@@ -875,6 +907,13 @@ UStaticMesh* FglTFRuntimeParser::FinalizeStaticMesh(TSharedRef<FglTFRuntimeStati
 	UBodySetup* BodySetup = StaticMesh->GetBodySetup();
 #else
 	UBodySetup* BodySetup = StaticMesh->BodySetup;
+#endif
+
+#if ENGINE_MAJOR_VERSION >= 5 && ENGINE_MINOR_VERSION >= 5
+	if (StaticMesh->bSupportRayTracing)
+	{
+		RenderData->InitializeRayTracingRepresentationFromRenderingLODs();
+	}
 #endif
 
 	StaticMesh->InitResources();
