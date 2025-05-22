@@ -20,6 +20,9 @@ public:
 	virtual int32 GeneratePCMData(uint8* PCMData, const int32 SamplesNeeded) override;
 	virtual bool HasCompressedData(FName Format, ITargetPlatform* TargetPlatform) const override { return false; }
 
+	virtual int32 GetOffset() { return RuntimeAudioOffset; }
+	virtual int32 GetMax() { return RuntimeAudioData.Num(); }
+	
 	virtual void SetRuntimeAudioData(const uint8* AudioData, const int64 AudioDataSize)
 	{
 		RuntimeAudioData.Empty();
